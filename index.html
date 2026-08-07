@@ -146,6 +146,7 @@
   .opts {
     display: flex;
     align-items: center;
+    flex-wrap: wrap;
     gap: 10px;
     margin-top: 14px;
     font-size: 13px;
@@ -201,7 +202,7 @@
 </div>
 
 <div class="entry">
-  <input id="entry" placeholder="Type a command" autocomplete="off" disabled>
+  <input id="entry" placeholder="One command, or several separated by spaces" autocomplete="off" disabled>
   <button id="send" disabled>Send</button>
 </div>
 
@@ -210,9 +211,15 @@
 <div class="opts">
   <label for="ending">Line ending</label>
   <select id="ending">
-    <option value="&#10;">Newline (LF)</option>
-    <option value="&#13;&#10;">Carriage return + newline</option>
-    <option value="">None</option>
+    <option value="&#10;">Newline — for word commands</option>
+    <option value="">None — for single characters</option>
+  </select>
+  <label for="gap">Gap between commands</label>
+  <select id="gap">
+    <option value="150">As fast as possible</option>
+    <option value="500">0.5 s</option>
+    <option value="1000" selected>1 s</option>
+    <option value="2000">2 s</option>
   </select>
   <button id="clear" style="margin-left:auto;padding:5px 12px;font-size:13px;">Clear log</button>
 </div>
@@ -342,11 +349,35 @@ async function send(text) {
   }
 }
 
+// Splits "l f r" into three commands and sends them in order, pausing between
+// each so the car has time to actually do something before the next arrives.
+let running = false;
+
+async function sendSequence(text) {
+  const steps = text.trim().split(/\s+/).filter(Boolean);
+  if (!steps.length || running) return;
+
+  running = true;
+  el('send').disabled = true;
+  if (steps.length > 1) log(steps.length + ' commands queued', 'sy');
+
+  for (let i = 0; i < steps.length; i++) {
+    if (!channel) { log('Sequence stopped — device disconnected', 'er'); break; }
+    await send(steps[i]);
+    if (i < steps.length - 1) {
+      await new Promise(r => setTimeout(r, Number(el('gap').value)));
+    }
+  }
+
+  running = false;
+  el('send').disabled = !channel;
+}
+
 el('link').onclick = () => channel ? disconnect() : connect();
 pad.forEach(b => b.onclick = () => send(b.dataset.cmd));
 el('send').onclick = () => {
   const text = el('entry').value;
-  if (text) { send(text); el('entry').value = ''; }
+  if (text) { sendSequence(text); el('entry').value = ''; }
 };
 el('entry').onkeydown = e => { if (e.key === 'Enter') el('send').click(); };
 el('clear').onclick = () => el('log').textContent = '';
