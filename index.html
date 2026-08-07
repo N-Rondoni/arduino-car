@@ -143,14 +143,27 @@
   .er { color: var(--warn); }
   .sy { color: var(--muted); }
 
+  .logbar {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 8px;
+  }
+  .logbar button { padding: 5px 12px; font-size: 13px; }
+
   .opts {
     display: flex;
     align-items: center;
     flex-wrap: wrap;
-    gap: 10px;
+    gap: 10px 22px;
     margin-top: 14px;
     font-size: 13px;
     color: var(--muted);
+  }
+  .opt {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    white-space: nowrap;
   }
   .opts select {
     font-family: var(--mono);
@@ -208,20 +221,27 @@
 
 <div id="log"></div>
 
+<div class="logbar">
+  <button id="clear">Clear log</button>
+</div>
+
 <div class="opts">
-  <label for="ending">Line ending</label>
-  <select id="ending">
-    <option value="&#10;">Newline — for word commands</option>
-    <option value="">None — for single characters</option>
-  </select>
-  <label for="gap">Gap between commands</label>
-  <select id="gap">
-    <option value="150">As fast as possible</option>
-    <option value="500">0.5 s</option>
-    <option value="1000" selected>1 s</option>
-    <option value="2000">2 s</option>
-  </select>
-  <button id="clear" style="margin-left:auto;padding:5px 12px;font-size:13px;">Clear log</button>
+  <div class="opt">
+    <label for="ending">Line ending</label>
+    <select id="ending">
+      <option value="&#10;">Newline — for word commands</option>
+      <option value="">None — for single characters</option>
+    </select>
+  </div>
+  <div class="opt">
+    <label for="gap">Gap between commands</label>
+    <select id="gap">
+      <option value="150">As fast as possible</option>
+      <option value="500">0.5 s</option>
+      <option value="1000" selected>1 s</option>
+      <option value="2000">2 s</option>
+    </select>
+  </div>
 </div>
 
 <script>
