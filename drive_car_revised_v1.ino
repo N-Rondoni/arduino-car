@@ -6,7 +6,7 @@
       f  forward        b  back           l  left
       r  right          s  stop
 
-      tl  turn left     tr  turn right    (by degrees, not seconds - see below)
+      tl  turn left     tr  turn right    (by degrees - see below)
 
       on   LED steady            off  LED off
       p    LED pulses            (short for "pulse")
@@ -70,15 +70,22 @@
     — this still applies on top of any duration timer.
 
   TURNING BY DEGREES
-    tl and tr work like l and r, but the number after them is degrees, not
-    seconds:  tl90 pivots left roughly 90°, tr45 pivots right roughly 45°.
+    tl and tr turn using a single back wheel — tl spins only the back-left
+    wheel, tr spins only the back-right wheel — rather than the two-wheel
+    pivot that plain l and r do. The number after them is degrees, not
+    seconds:  tl90 turns left roughly 90°, tr45 turns right roughly 45°.
+    Leave the number off and it defaults to DEFAULT_TURN_DEGREES:  tl  is
+    the same as  tl90  (with the default left at 90).
 
     "Roughly" is the honest word for it - the car has no way to sense how
     far it's actually turned, so this is really "however long MS_PER_DEGREE
     says 90° takes." That constant needs calibrating on your actual car
-    (see its comment above) before the angles will be close to accurate.
-    Plain l / r (with or without a plain number of seconds) still work
-    exactly as before, if you'd rather turn by time instead of degrees.
+    (see its comment above) before the angles will be close to accurate -
+    and since tl/tr only drive one wheel, expect that number to be
+    different than it was for the old two-wheel pivot.
+
+    Plain l / r (with or without a plain number of seconds) still do the
+    original two-wheel pivot turn, timed by seconds rather than degrees.
 
   DEBUGGING
     The USB Serial Monitor is free — open it at 9600 to watch commands
@@ -109,14 +116,18 @@ unsigned long lastPing = 0;
 
 const byte SPEED = 100;     // 0-255. Raise for a faster car.
 
-// How many milliseconds a 1-degree pivot turn takes at the current SPEED.
-// Used to turn "tl90" into a duration. There's no sensor telling the car
-// how far it's actually turned, so this has to be measured by hand:
+// How many milliseconds a 1-degree turn takes at the current SPEED, using
+// tl/tr's single-wheel turn. Used to turn "tl90" into a duration. There's
+// no sensor telling the car how far it's actually turned, so this has to
+// be measured by hand:
 //   1. Send "tl360" (or count seconds if you'd rather test with plain "l").
 //   2. Watch how far the car actually rotates, in degrees.
 //   3. MS_PER_DEGREE = MS_PER_DEGREE * (360.0 / actual_degrees_achieved)
 // Redo this any time SPEED, the battery, or the car's weight changes much.
 const float MS_PER_DEGREE = 8.0;
+
+// What "tl" or "tr" alone (no number) turns by.
+const float DEFAULT_TURN_DEGREES = 90.0;
 
 // Auto-stop if the car is moving and no command arrives for this long.
 // Guards against a dropped connection leaving a car driving into a wall.
@@ -203,8 +214,8 @@ void loop() {
     if (pendingTurnDegrees != 0) {
       int degrees = pendingTurnDegrees;
       pendingTurnDegrees = 0;
-      if (degrees > 0) { left();  scheduleDegrees(degrees); }
-      else              { right(); scheduleDegrees(-degrees); }
+      if (degrees > 0) { turnLeft();  scheduleDegrees(degrees); }
+      else              { turnRight(); scheduleDegrees(-degrees); }
       say(F("turning"));
     }
     else {
@@ -347,8 +358,16 @@ void run(const char *cmd) {
   else if (matches(action, "b", "back"))    { back();    schedule(value); }
   else if (matches(action, "l", "left"))    { left();    schedule(value); }
   else if (matches(action, "r", "right"))   { right();   schedule(value); }
-  else if (matches(action, "tl", "turnleft"))  { left();  scheduleDegrees(value); }
-  else if (matches(action, "tr", "turnright")) { right(); scheduleDegrees(value); }
+  else if (matches(action, "tl", "turnleft")) {
+    float degrees = (value > 0) ? value : DEFAULT_TURN_DEGREES;
+    turnLeft();
+    scheduleDegrees(degrees);
+  }
+  else if (matches(action, "tr", "turnright")) {
+    float degrees = (value > 0) ? value : DEFAULT_TURN_DEGREES;
+    turnRight();
+    scheduleDegrees(degrees);
+  }
   else if (matches(action, "s", "stop")) {
     halt();
     timedMoveActive = false;
@@ -379,8 +398,11 @@ void run(const char *cmd) {
 /* ---- movement ------------------------------------------------------------
    Left side is Motor1 and Motor2. Right side is Motor3 and Motor4.
 
-   Turns are pivots: one side forward, the other back, so the car spins in
-   place rather than arcing.
+   l/r are pivot turns: one side forward, the other back, so the car spins
+   in place rather than arcing.
+
+   tl/tr are single-wheel turns: only one back wheel moves at a time, the
+   other three motors are released. See turnLeft()/turnRight() below.
 
    If a turn goes the wrong way, the motor leads are crossed on that side —
    fix the wiring rather than the code, or forward and back will be wrong too.
@@ -428,6 +450,32 @@ void right() {
   // This is a pivot turn — the car spins in place. For a wider, gentler arc,
   // change the two BACKWARD lines above to RELEASE so that side coasts.
   say(F("right"));
+}
+
+// tl - turns using only the back-left wheel (Motor1). The other three
+// motors are released (coast free) rather than driven.
+// If this turns the wrong way on your car, change FORWARD to BACKWARD below.
+void turnLeft() {
+  moving = true;
+  currentDirection = GOING_LEFT;
+  Motor1.run(FORWARD);
+  Motor2.run(RELEASE);
+  Motor3.run(RELEASE);
+  Motor4.run(RELEASE);
+  say(F("turn left"));
+}
+
+// tr - turns using only the back-right wheel (Motor4). The other three
+// motors are released (coast free) rather than driven.
+// If this turns the wrong way on your car, change FORWARD to BACKWARD below.
+void turnRight() {
+  moving = true;
+  currentDirection = GOING_RIGHT;
+  Motor1.run(RELEASE);
+  Motor2.run(RELEASE);
+  Motor3.run(RELEASE);
+  Motor4.run(FORWARD);
+  say(F("turn right"));
 }
 
 void halt() {
